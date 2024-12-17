@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package matrix_service;
+
+import "matrix.proto";
+
+message ProcedureData
+{
+    enum ProcedureId
+    {
+        INVALID   = 0; // Все enum-ы должны начинаться с 0 для proto3. Используется для ошибок
+        MATRIX_OP = 1; // Соответствует XXX{Request,Response}::Id::ID
+    }
+
+    ProcedureId proc_id = 1; // Id процедуры, для которой данный протобуф является запросом/ответом
+    bytes payload       = 2; // Сериализованный протобуф запроса или ответа <или> ошибка
+}
+
+
+message MatrixOpRequest
+{
+    enum Id { INVALID = 0; ID = 1; }
+
+    enum Operator
+    {
+        MUL = 0;
+    }
+    Operator op          = 1;
+    repeated Matrix args = 2;
+}
+
+message MatrixOpResponse
+{
+    enum Id { INVALID = 0; ID = 1; }
+
+    oneof Content {
+        Matrix result = 1;
+        string error  = 2;
+    }
+}

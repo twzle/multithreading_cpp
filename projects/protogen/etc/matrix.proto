@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package matrix_service;
+
+message Matrix
+{
+    uint32 rows            = 1;
+    uint32 columns         = 2;
+    repeated float content = 3;
+}

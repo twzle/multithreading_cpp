@@ -1,0 +1,7 @@
+build
+bin
+.tmp
+projects/protogen/cpp
+projects/protogen/py
+__pycache__
+tests/matrix_service/*venv*

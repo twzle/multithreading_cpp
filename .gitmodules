@@ -1,0 +1,9 @@
+[submodule "third-party/protobuf"]
+	path = third-party/protobuf
+	url = https://github.com/protocolbuffers/protobuf
+[submodule "third-party/Catch2"]
+	path = third-party/Catch2
+	url = https://github.com/catchorg/Catch2/
+[submodule "third-party/cxxopts"]
+	path = third-party/cxxopts
+	url = git@github.com:jarro2783/cxxopts.git
