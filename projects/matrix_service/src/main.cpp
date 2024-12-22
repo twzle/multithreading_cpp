@@ -1,5 +1,6 @@
 #include "server.hpp"
 #include "st_blocking_server.hpp"
+#include "st_nonblocking_server.hpp"
 
 #include "cxxopts.hpp"
 
@@ -55,8 +56,10 @@ int main(int argc, char* argv[])
         return ArgErrorExitCode;
     }
 
-    if (server_type == "st_blocking")
-        g_server = std::make_unique<matrix_service::StBlockingServer>(std::move(conf));
+    if (server_type == "st_blocking") {}
+        // g_server = std::make_unique<matrix_service::StBlockingServer>(std::move(conf));
+    else if (server_type == "st_nonblocking")
+        g_server = std::make_unique<matrix_service::StNonblockingServer>(std::move(conf));
     else
     {
         std::cerr << "Unknown type of server: '" << server_type << "', allowed: " << AllowedServerType << std::endl;
