@@ -59,7 +59,7 @@ namespace matrix_service
     private:
         int server_socket_ = -1;
         int epoll_fd_ = -1;
-        std::unordered_map<int, ClientState> clients_; // Хранение состояний клиентов
+        std::unordered_map<int, ClientState> clients_;
 
         void SetupEpoll();
         void ProcessEvents();

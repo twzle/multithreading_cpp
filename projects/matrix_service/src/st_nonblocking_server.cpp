@@ -65,27 +65,24 @@ namespace matrix_service
 
     void StNonblockingServer::OnStop()
     {
-        // Закрытие всех клиентов
         for (auto &client : clients_)
         {
             if (client.first != -1)
             {
-                shutdown(client.first, SHUT_RDWR); // Завершаем соединение с клиентом
-                close(client.first);               // Закрываем клиентский сокет
+                shutdown(client.first, SHUT_RDWR);
+                close(client.first);
             }
         }
 
-        // Закрытие дескриптора epoll
         if (epoll_fd_ != -1)
         {
             close(epoll_fd_);
         }
 
-        // Закрытие серверного сокета
         if (server_socket_ != -1)
         {
-            shutdown(server_socket_, SHUT_RDWR); // Завершаем соединение с сервером
-            close(server_socket_);               // Закрываем серверный сокет
+            shutdown(server_socket_, SHUT_RDWR);
+            close(server_socket_);
         }
     }
 
@@ -135,12 +132,10 @@ namespace matrix_service
                 {
                     if (events[i].events & EPOLLIN)
                     {
-                        // std::cout << "IN " << client_socket << "\n";
                         HandleClientRead(client_socket);
                     }
                     if (events[i].events & EPOLLOUT)
                     {
-                        // std::cout << "OUT " << client_socket << "\n";
                         HandleClientWrite(client_socket);
                     }
                 }
@@ -152,9 +147,8 @@ namespace matrix_service
     {
         auto &state = clients_[client_socket];
 
-        // Читаем размер сообщения
         if (state.read_buffer.empty())
-            state.read_buffer.resize(4); // Размер content_size
+            state.read_buffer.resize(4);
 
         auto io_func = [](int sock, char *buffer, std::size_t size) -> int
         {
@@ -170,7 +164,7 @@ namespace matrix_service
         if (state.read_offset < 4)
             return; // Ожидаем, пока размер будет прочитан
 
-        // Читаем само сообщение
+
         if (state.read_buffer.size() == 4)
         {
             int content_size = *reinterpret_cast<int *>(state.read_buffer.data());
@@ -234,15 +228,14 @@ namespace matrix_service
 
         if (state.write_offset == state.write_buffer.size())
         {
-            // std::cout << "WRITE\n";
             // std::cout << std::string(state.write_buffer.begin(), state.write_buffer.end()) << "\n";
             state.write_buffer.clear();
             state.write_offset = 0;
 
-            // Обновляем epoll на чтение
+            
             if (Cfg().keepalive && !state.is_closing)
             {
-
+                // Обновляем epoll на чтение
                 epoll_event event = {};
                 event.events = EPOLLIN;
                 event.data.fd = client_socket;
@@ -261,7 +254,6 @@ namespace matrix_service
         shutdown(client_socket, SHUT_RDWR);
         close(client_socket);
         clients_.erase(client_socket);
-        // std::cout << "CLOSE CLIENT\n";
     }
 
     bool StNonblockingServer::TryIOEnough(
@@ -288,20 +280,20 @@ namespace matrix_service
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    if (errno == EAGAIN)
-                    {
-                        // std::cout << "EAGAIN\n";
-                    }
-                    else
-                    {
-                        // std::cout << "EWB\n";
-                    }
+                    // if (errno == EAGAIN)
+                    // {
+                    //     // std::cout << "EAGAIN\n";
+                    // }
+                    // else
+                    // {
+                    //     // std::cout << "EWB\n";
+                    // }
 
                     return true; // Ожидаем следующего события epoll
                 }
                 else
                 {
-                    return false; // Ошибка
+                    return false;
                 }
             }
         }
@@ -311,11 +303,9 @@ namespace matrix_service
 
     void StNonblockingServer::Swap(StNonblockingServer &another)
     {
-        // Перестановка основных ресурсов
         std::swap(server_socket_, another.server_socket_);
         std::swap(epoll_fd_, another.epoll_fd_);
 
-        // Перестановка состояния клиентов
         std::swap(clients_, another.clients_);
     }
 
