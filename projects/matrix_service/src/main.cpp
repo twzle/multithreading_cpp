@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
     using namespace std::string_literals;
 
     static constexpr int ArgErrorExitCode = 1;
-    constexpr std::string_view AllowedServerType = "st_blocking";
+    constexpr std::string_view AllowedServerType = "st_blocking, st_nonblocking";
 
     matrix_service::Server::Config conf;
 
@@ -56,8 +56,8 @@ int main(int argc, char* argv[])
         return ArgErrorExitCode;
     }
 
-    if (server_type == "st_blocking") {}
-        // g_server = std::make_unique<matrix_service::StBlockingServer>(std::move(conf));
+    if (server_type == "st_blocking")
+        g_server = std::make_unique<matrix_service::StBlockingServer>(std::move(conf));
     else if (server_type == "st_nonblocking")
         g_server = std::make_unique<matrix_service::StNonblockingServer>(std::move(conf));
     else
