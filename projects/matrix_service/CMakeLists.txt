@@ -2,7 +2,10 @@ project(matrix_service)
 
 set(MATRIX_SERVICE_SRC_FILES
     src/main.cpp
+    src/utility.cpp
     src/st_blocking_server.cpp
+    src/mt_blocking_server.cpp
+    src/st_nonblocking_server.cpp
 )
 
 SET(MATRIX_SERVICE_NAME ${PROJECT_NAME})

@@ -1,5 +1,6 @@
 #include "server.hpp"
 #include "st_blocking_server.hpp"
+#include "mt_blocking_server.hpp"
 #include "st_nonblocking_server.hpp"
 
 #include "cxxopts.hpp"
@@ -16,7 +17,8 @@
 std::unique_ptr<matrix_service::Server> g_server;
 
 void StopHandler(int)
-{
+{   
+    std::cout << "STOP HANDLER\n";
     if (g_server)
         g_server->Stop();
 }
@@ -38,7 +40,8 @@ int main(int argc, char* argv[])
         ("s,server_type", "type of the server, allowed: "s + AllowedServerType.data(), cxxopts::value<std::string>(server_type))
         ("a,address", "the listening address", cxxopts::value<std::string>(conf.listening_address)->default_value("0.0.0.0"s))
         ("p,port", "the port for app", cxxopts::value<std::uint16_t>(conf.port)->default_value("8080"s))
-        ("k,keepalive", "should server support keepalive mode", cxxopts::value<bool>(conf.keepalive)->default_value("false"s));
+        ("k,keepalive", "should server support keepalive mode", cxxopts::value<bool>(conf.keepalive)->default_value("false"s))
+        ("t,threads", "thread limit for MtBlockingServer", cxxopts::value<std::uint16_t>(conf.thread_limit)->default_value("2"s));
 
     try
     {
@@ -58,6 +61,8 @@ int main(int argc, char* argv[])
 
     if (server_type == "st_blocking")
         g_server = std::make_unique<matrix_service::StBlockingServer>(std::move(conf));
+    else if (server_type == "mt_blocking")
+        g_server = std::make_unique<matrix_service::MtBlockingServer>(std::move(conf));
     else if (server_type == "st_nonblocking")
         g_server = std::make_unique<matrix_service::StNonblockingServer>(std::move(conf));
     else

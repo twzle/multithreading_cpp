@@ -19,11 +19,12 @@ import matrix_service_pb2
 
 
 BIN_FILE = ROOT_DIR + '/bin/matrix_service'
-MODE = 'st_blocking'
+MODE = 'mt_blocking'
 ADDR = '127.0.0.1'
-PORT = '23191' # FIXME: Generate
-TIMEOUT = 1
-ARGS = [BIN_FILE, '--server_type', MODE, '-a', ADDR, '-p', PORT]
+PORT = '23194' # FIXME: Generate
+TIMEOUT = 5
+THREADS = str(4)
+ARGS = [BIN_FILE, '--server_type', MODE, '-a', ADDR, '-p', PORT, '-t', THREADS]
 
 class TestServer:
     def kill(self):
@@ -46,7 +47,7 @@ class TestServer:
     def finalize(self):
         try:
             self.server.send_signal(signal.SIGINT)
-            self.stdout, self.stderr = self.server.communicate()
+            self.stdout, self.stderr = self.server.communicate(timeout=TIMEOUT)
         finally:
             self.timer.cancel()
 

@@ -1,16 +1,6 @@
 #include "st_nonblocking_server.hpp"
 #include "utility.hpp"
 
-#include <sys/epoll.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <fcntl.h>
-#include <unordered_map>
-#include <queue>
-#include <cstring>
-#include <cassert>
 
 namespace matrix_service
 {
@@ -182,9 +172,9 @@ namespace matrix_service
             // Сообщение полностью прочитано, обрабатываем его
             std::string request(state.read_buffer.begin() + 4, state.read_buffer.end());
             auto response = ExecuteProcedure(request);
+            // Проверка если после сериализации получен битый пакет
             state.is_closing = !response.second;
 
-            // Подготавливаем данные для записи
             int response_size = response.first.size();
             state.write_buffer.resize(sizeof(response_size) + response_size);
             std::memcpy(state.write_buffer.data(), &response_size, sizeof(response_size));
@@ -213,7 +203,6 @@ namespace matrix_service
             return write(sock, buffer, size);
         };
 
-        // std::cout << "WR SIZE = " << state.write_buffer.size() << "\n";
 
         if (!TryIOEnough(
             client_socket, 
@@ -228,12 +217,12 @@ namespace matrix_service
 
         if (state.write_offset == state.write_buffer.size())
         {
-            // std::cout << std::string(state.write_buffer.begin(), state.write_buffer.end()) << "\n";
             state.write_buffer.clear();
             state.write_offset = 0;
 
-            
-            if (Cfg().keepalive && !state.is_closing)
+            // Если пакет не был битым и keepalive == true, то нужно читать следующий запрос
+            bool read_next = Cfg().keepalive && !state.is_closing;
+            if (read_next)
             {
                 // Обновляем epoll на чтение
                 epoll_event event = {};
@@ -266,8 +255,6 @@ namespace matrix_service
         while (processed_cnt < required_size)
         {
             int res = io_func(client_socket, buff + processed_cnt, required_size - processed_cnt);
-
-            // std::cout << ", RES = " << res << "\n";
             if (res > 0)
             {
                 processed_cnt += res;
@@ -280,16 +267,7 @@ namespace matrix_service
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    // if (errno == EAGAIN)
-                    // {
-                    //     // std::cout << "EAGAIN\n";
-                    // }
-                    // else
-                    // {
-                    //     // std::cout << "EWB\n";
-                    // }
-
-                    return true; // Ожидаем следующего события epoll
+                    return true; // Ожидаем следующего события
                 }
                 else
                 {
