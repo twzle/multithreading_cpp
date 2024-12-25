@@ -99,13 +99,19 @@ namespace matrix_service
         while (!stop_requested_)
         {
             {
-                std::unique_lock<std::mutex> lock(mutex_);
                 if (threads_.size() >= thread_limit_)
                 {
+                    std::unique_lock<std::mutex> lock(mutex_);
                     cv_.wait(lock, [this]
                              { return has_empty_thread_ || stop_requested_; });
-                    has_empty_thread_.store(false);
                 }
+
+                if (stop_requested_)
+                {
+                    break;
+                }
+
+                has_empty_thread_.store(false);
             }
 
             int client_socket = accept(server_socket_, nullptr, nullptr);
@@ -122,28 +128,20 @@ namespace matrix_service
                 }
             }
 
-            if (stop_requested_)
-            {
-                VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
-                close(client_socket);
-                break;
-            }
-
             threads_.erase(
                 std::remove_if(
-                    threads_.begin(), 
-                    threads_.end(), 
+                    threads_.begin(),
+                    threads_.end(),
                     [](std::thread &t)
                     {
-                        if (t.joinable()){
+                        if (t.joinable())
+                        {
                             t.join();
                             return true;
                         }
-                        return false; 
-                    }
-                    ),
-                    threads_.end()
-                );
+                        return false;
+                    }),
+                threads_.end());
 
             threads_.emplace_back([this, client_socket]
                                   { RunThread(client_socket); });
