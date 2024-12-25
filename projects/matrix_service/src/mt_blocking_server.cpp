@@ -83,19 +83,13 @@ namespace matrix_service
                 break;
             }
 
-
             // Если пакет битый или нет keepalive, то не нужно читать дальше
-            if (!result.second)
-            {
-                break;
-            }
-
-            if (!Cfg().keepalive)
+            if (!result.second || !Cfg().keepalive)
             {
                 break;
             }
         }
-        
+
         VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
         close(client_socket);
     }
@@ -104,6 +98,16 @@ namespace matrix_service
     {
         while (!stop_requested_)
         {
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                if (threads_.size() >= thread_limit_)
+                {
+                    cv_.wait(lock, [this]
+                             { return has_empty_thread_ || stop_requested_; });
+                    has_empty_thread_.store(false);
+                }
+            }
+
             int client_socket = accept(server_socket_, nullptr, nullptr);
 
             if (client_socket == -1)
@@ -112,38 +116,37 @@ namespace matrix_service
                 {
                     RaiseLinuxCallError(__LINE__, __FILE__, "accept", "in MtBlockingServer::Run");
                 }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (stop_requested_)
+            {
+                VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
+                close(client_socket);
                 break;
             }
 
-            {
-                std::unique_lock<std::mutex> lock(mutex_);
+            threads_.erase(
+                std::remove_if(
+                    threads_.begin(), 
+                    threads_.end(), 
+                    [](std::thread &t)
+                    {
+                        if (t.joinable()){
+                            t.join();
+                            return true;
+                        }
+                        return false; 
+                    }
+                    ),
+                    threads_.end()
+                );
 
-                if (threads_.size() == thread_limit_)
-                {
-                    cv_.wait(lock, [this]
-                             { return has_empty_thread_ || stop_requested_; });
-                    has_empty_thread_.store(false);
-                }
-
-                if (stop_requested_)
-                {
-                    VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
-                    close(client_socket);
-                    break;
-                }
-
-                threads_.erase(std::remove_if(threads_.begin(), threads_.end(), [](std::thread &t)
-                                              {if (t.joinable()){ 
-                                                    t.join();
-                                                    return true; // Удаляем поток после join
-                                                }
-                                                return false; }
-                ),
-                               threads_.end());
-
-                threads_.emplace_back([this, client_socket]
-                                      { RunThread(client_socket); });
-            }
+            threads_.emplace_back([this, client_socket]
+                                  { RunThread(client_socket); });
         }
     }
 
