@@ -19,11 +19,11 @@ import matrix_service_pb2
 
 
 BIN_FILE = ROOT_DIR + '/bin/matrix_service'
-MODE = 'st_blocking'
+MODE = 'st_nonblocking'
 ADDR = '127.0.0.1'
-PORT = '23191' # FIXME: Generate
+PORT = '23192' # FIXME: Generate
 TIMEOUT = 2
-THREADS = str(2)
+THREADS = str(4)
 ARGS = [BIN_FILE, '--server_type', MODE, '-a', ADDR, '-p', PORT, '-t', THREADS]
 
 class TestServer:
@@ -47,7 +47,7 @@ class TestServer:
     def finalize(self):
         try:
             self.server.send_signal(signal.SIGINT)
-            self.stdout, self.stderr = self.server.communicate(timeout=TIMEOUT)
+            self.stdout, self.stderr = self.server.communicate()
         finally:
             self.timer.cancel()
 
@@ -75,7 +75,7 @@ class Connection:
             sleep(0.05) # To make effect
 
     def send_request(self, serialized_proto):
-        self.send(len(msg).to_bytes(4, 'little'), True) # TODO: Change to big endian
+        self.send(len(msg).to_bytes(4, 'little'), False) # TODO: Change to big endian
         self.send(serialized_proto)
 
     def try_recv(self):
