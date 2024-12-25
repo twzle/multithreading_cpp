@@ -97,16 +97,13 @@ namespace matrix_service
 
                 if (client_socket == server_socket_)
                 {
-                    // Новый клиент
                     int new_client = accept(server_socket_, nullptr, nullptr);
                     if (new_client == -1)
                         continue;
 
-                    // Переводим в неблокирующий режим
                     int flags = fcntl(new_client, F_GETFL, 0);
                     fcntl(new_client, F_SETFL, flags | O_NONBLOCK);
 
-                    // Добавляем в epoll и таблицу клиентов
                     epoll_event event = {};
                     event.events = EPOLLIN;
                     event.data.fd = new_client;
@@ -152,7 +149,7 @@ namespace matrix_service
         }
 
         if (state.read_offset < 4)
-            return; // Ожидаем, пока размер будет прочитан
+            return;
 
 
         if (state.read_buffer.size() == 4)
@@ -169,10 +166,8 @@ namespace matrix_service
 
         if (state.read_offset == state.read_buffer.size())
         {
-            // Сообщение полностью прочитано, обрабатываем его
             std::string request(state.read_buffer.begin() + 4, state.read_buffer.end());
             auto response = ExecuteProcedure(request);
-            // Проверка если после сериализации получен битый пакет
             state.is_closing = !response.second;
 
             int response_size = response.first.size();
@@ -261,13 +256,13 @@ namespace matrix_service
             }
             else if (res == 0)
             {
-                return false; // Клиент закрыл соединение
+                return false;
             }
             else
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    return true; // Ожидаем следующего события
+                    return true;
                 }
                 else
                 {
@@ -283,7 +278,6 @@ namespace matrix_service
     {
         std::swap(server_socket_, another.server_socket_);
         std::swap(epoll_fd_, another.epoll_fd_);
-
         std::swap(clients_, another.clients_);
     }
 

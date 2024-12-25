@@ -1,15 +1,13 @@
 #include "mt_blocking_server.hpp"
 #include "utility.hpp"
-
 #include "executor/executor.hpp"
+
 #include <iostream>
-#include <algorithm>
-#include <cassert>
 
 namespace matrix_service
 {
     MtBlockingServer::MtBlockingServer(Config conf)
-        : Server(std::move(conf))
+        : Server(std::move(conf)), stop_requested_(false)
     {
         VALIDATE_LINUX_CALL(server_socket_ = socket(AF_INET, SOCK_STREAM, 0));
 
@@ -25,13 +23,14 @@ namespace matrix_service
 
         constexpr std::uint32_t queue_size = 5;
         listen(server_socket_, queue_size);
-        has_empty_thread_.store(true);
+        thread_limit_ = Cfg().thread_limit;
     }
 
     MtBlockingServer::~MtBlockingServer()
     {
         OnStop();
-        for (auto &thread : threads_)
+        JoinCompletedThreads();
+        for (auto &[id, thread] : active_threads_)
         {
             if (thread.joinable())
             {
@@ -43,14 +42,78 @@ namespace matrix_service
     void MtBlockingServer::OnStop()
     {
         stop_requested_ = true;
-        if (server_socket_ != -1)
-        {
-            shutdown(server_socket_, SHUT_RDWR);
-            close(server_socket_);
-        }
+        shutdown(server_socket_, SHUT_RDWR);
+        close(server_socket_);
 
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.notify_all();
+    }
+
+    void MtBlockingServer::Run()
+    {
+        while (!stop_requested_)
+        {
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                if (active_threads_.size() >= thread_limit_)
+                {
+                    cv_.wait(lock, [this]
+                             { return !finished_threads_.empty() || stop_requested_; });
+                    JoinCompletedThreads();
+                }
+
+                if (stop_requested_)
+                {
+                    break;
+                }
+            }
+
+            int client_socket = accept(server_socket_, nullptr, nullptr);
+            if (client_socket == -1)
+            {
+                if (!stop_requested_)
+                {
+                    RaiseLinuxCallError(__LINE__, __FILE__, "accept", "in MtBlockingServer::Run");
+                }
+                break;
+            }
+
+            std::thread client_thread(
+                [this, client_socket]
+                {
+                    HandleClient(client_socket);
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        finished_threads_.push(std::this_thread::get_id());
+                        cv_.notify_all();
+                    } 
+                }
+            );
+
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                active_threads_.emplace(client_thread.get_id(), std::move(client_thread));
+            }
+        }
+    }
+
+    void MtBlockingServer::JoinCompletedThreads()
+    {
+        while (!finished_threads_.empty())
+        {
+            auto id = finished_threads_.front();
+            finished_threads_.pop();
+
+            auto it = active_threads_.find(id);
+            if (it != active_threads_.end())
+            {
+                if (it->second.joinable())
+                {
+                    it->second.join();
+                }
+                active_threads_.erase(it);
+            }
+        }
     }
 
     void MtBlockingServer::HandleClient(int client_socket)
@@ -92,71 +155,6 @@ namespace matrix_service
 
         VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
         close(client_socket);
-    }
-
-    void MtBlockingServer::Run()
-    {
-        while (!stop_requested_)
-        {
-            {
-                if (threads_.size() >= thread_limit_)
-                {
-                    std::unique_lock<std::mutex> lock(mutex_);
-                    cv_.wait(lock, [this]
-                             { return has_empty_thread_ || stop_requested_; });
-                }
-
-                if (stop_requested_)
-                {
-                    break;
-                }
-
-                has_empty_thread_.store(false);
-            }
-
-            int client_socket = accept(server_socket_, nullptr, nullptr);
-
-            if (client_socket == -1)
-            {
-                if (!stop_requested_)
-                {
-                    RaiseLinuxCallError(__LINE__, __FILE__, "accept", "in MtBlockingServer::Run");
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            threads_.erase(
-                std::remove_if(
-                    threads_.begin(),
-                    threads_.end(),
-                    [](std::thread &t)
-                    {
-                        if (t.joinable())
-                        {
-                            t.join();
-                            return true;
-                        }
-                        return false;
-                    }),
-                threads_.end());
-
-            threads_.emplace_back([this, client_socket]
-                                  { RunThread(client_socket); });
-        }
-    }
-
-    void MtBlockingServer::RunThread(int client_socket)
-    {
-        HandleClient(client_socket);
-
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            has_empty_thread_.store(true);
-            cv_.notify_all();
-        }
     }
 
     template <typename IOFunc>
