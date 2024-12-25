@@ -18,7 +18,6 @@ std::unique_ptr<matrix_service::Server> g_server;
 
 void StopHandler(int)
 {   
-    std::cout << "STOP HANDLER\n";
     if (g_server)
         g_server->Stop();
 }

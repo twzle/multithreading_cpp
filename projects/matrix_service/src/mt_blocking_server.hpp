@@ -54,6 +54,7 @@ private:
     std::condition_variable cv_;
     std::vector<std::thread> threads_;
     std::atomic<bool> stop_requested_;
+    std::atomic<bool> has_empty_thread_;
     int server_socket_ = -1;
 };
 

@@ -25,6 +25,7 @@ namespace matrix_service
 
         constexpr std::uint32_t queue_size = 5;
         listen(server_socket_, queue_size);
+        has_empty_thread_.store(true);
     }
 
     MtBlockingServer::~MtBlockingServer()
@@ -54,48 +55,47 @@ namespace matrix_service
 
     void MtBlockingServer::HandleClient(int client_socket)
     {
-        try
+        while (!stop_requested_)
         {
-            while (!stop_requested_)
+            int content_size = 0;
+            if (!TryIOEnough(client_socket, sizeof(content_size), (char *)&content_size, &read))
             {
-                int content_size = 0;
-                if (!TryIOEnough(client_socket, sizeof(content_size), (char *)&content_size, &read))
-                {
-                    break;
-                }
+                break;
+            }
 
-                if (content_size == 0)
-                {
-                    continue;
-                }
+            if (content_size == 0)
+            {
+                continue;
+            }
 
-                std::string request(content_size, '\0');
-                if (!TryIOEnough(client_socket, content_size, &request[0], &read))
-                {
-                    break;
-                }
+            std::string request(content_size, '\0');
+            if (!TryIOEnough(client_socket, content_size, &request[0], &read))
+            {
+                break;
+            }
 
-                auto result = ExecuteProcedure(request);
+            auto result = ExecuteProcedure(request);
 
-                content_size = result.first.size();
-                if (!TryIOEnough(client_socket, sizeof(content_size), (char *)&content_size, &write) ||
-                    !TryIOEnough(client_socket, content_size, result.first.data(), &write))
-                {
-                    break;
-                }
+            content_size = result.first.size();
+            if (!TryIOEnough(client_socket, sizeof(content_size), (char *)&content_size, &write) ||
+                !TryIOEnough(client_socket, content_size, result.first.data(), &write))
+            {
+                break;
+            }
 
-                // Если пакет битый или нет keepalive, то не нужно читать дальше
-                if (!result.second || !Cfg().keepalive)
-                {
-                    break;
-                }
+
+            // Если пакет битый или нет keepalive, то не нужно читать дальше
+            if (!result.second)
+            {
+                break;
+            }
+
+            if (!Cfg().keepalive)
+            {
+                break;
             }
         }
-        catch (const std::exception &e)
-        {
-            std::cerr << "Error in HandleClient: " << e.what() << "\n";
-        }
-
+        
         VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
         close(client_socket);
     }
@@ -105,6 +105,7 @@ namespace matrix_service
         while (!stop_requested_)
         {
             int client_socket = accept(server_socket_, nullptr, nullptr);
+
             if (client_socket == -1)
             {
                 if (!stop_requested_)
@@ -116,14 +117,29 @@ namespace matrix_service
 
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                cv_.wait(lock, [this]
-                         { return threads_.size() < Cfg().thread_limit || stop_requested_; });
+
+                if (threads_.size() == thread_limit_)
+                {
+                    cv_.wait(lock, [this]
+                             { return has_empty_thread_ || stop_requested_; });
+                    has_empty_thread_.store(false);
+                }
 
                 if (stop_requested_)
                 {
+                    VALIDATE_LINUX_CALL(shutdown(client_socket, SHUT_RDWR));
                     close(client_socket);
                     break;
                 }
+
+                threads_.erase(std::remove_if(threads_.begin(), threads_.end(), [](std::thread &t)
+                                              {if (t.joinable()){ 
+                                                    t.join();
+                                                    return true; // Удаляем поток после join
+                                                }
+                                                return false; }
+                ),
+                               threads_.end());
 
                 threads_.emplace_back([this, client_socket]
                                       { RunThread(client_socket); });
@@ -137,9 +153,7 @@ namespace matrix_service
 
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            threads_.erase(std::remove_if(threads_.begin(), threads_.end(), [](const std::thread &t)
-                                          { return !t.joinable(); }),
-                           threads_.end());
+            has_empty_thread_.store(true);
             cv_.notify_all();
         }
     }

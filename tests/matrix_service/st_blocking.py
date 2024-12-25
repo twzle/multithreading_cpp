@@ -22,8 +22,8 @@ BIN_FILE = ROOT_DIR + '/bin/matrix_service'
 MODE = 'mt_blocking'
 ADDR = '127.0.0.1'
 PORT = '23194' # FIXME: Generate
-TIMEOUT = 5
-THREADS = str(4)
+TIMEOUT = 2
+THREADS = str(2)
 ARGS = [BIN_FILE, '--server_type', MODE, '-a', ADDR, '-p', PORT, '-t', THREADS]
 
 class TestServer:
@@ -75,7 +75,7 @@ class Connection:
             sleep(0.05) # To make effect
 
     def send_request(self, serialized_proto):
-        self.send(len(msg).to_bytes(4, 'little'), False) # TODO: Change to big endian
+        self.send(len(msg).to_bytes(4, 'little'), True) # TODO: Change to big endian
         self.send(serialized_proto)
 
     def try_recv(self):
