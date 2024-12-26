@@ -260,7 +260,7 @@ namespace matrix_service
             }
             else
             {
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                if (errno == EAGAIN)
                 {
                     return true;
                 }
